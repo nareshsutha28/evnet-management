@@ -27,3 +27,9 @@ run three terminal parellel
     ```
         celery -A celery_app beat --loglevel=info
     ```
+
+4. please user default user password to generate jwt
+
+    email: admin@gmail.com
+    password: password123
+
