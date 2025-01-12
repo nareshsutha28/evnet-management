@@ -63,7 +63,7 @@ def get_all_events(db: Session):
 def register_attendee(db: Session, attendee: AttendeeCreate):
     # Check if the event exists
     db_event = db.query(Event).filter(Event.event_id == attendee.event_id,     
-                                      Event.start_time > datetime.now()).first()
+                                      Event.start_time > datetime.utcnow()).first()
     if not db_event:
         return None  # Event not found
 
@@ -99,10 +99,10 @@ def check_in_attendee(db: Session, email: str, event_id: int):
 
     db_event = db.query(Event).filter(Event.event_id == attendee.event_id).first()
     
-    if not db_event.start_time <= datetime.now():
+    if not db_event.start_time <= datetime.utcnow():
         return {"error": "Event is not started yet."}
         
-    elif datetime.now() > db_event.end_time:
+    elif datetime.utcnow() > db_event.end_time:
         return {"error": "Event is over."}
 
     attendee.check_in_status = True

@@ -1,6 +1,6 @@
 from typing import List
 from fastapi import (
-    FastAPI, Depends, HTTPException, status
+    FastAPI, Depends, HTTPException, status, UploadFile, File
 )
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -130,8 +130,9 @@ def get_attendees_by_event_id(event_id: int, db: Session = Depends(get_db), user
     return attendees
 
 
+# If attendee can update the status
 @app.post("/attendees/check-in/", response_model=schemas.AttendeeResponse)
-def check_in_attendee(request: schemas.CheckInRequest, db: Session = Depends(get_db)):
+def check_in_attendee(file: UploadFile = File(...), db: Session = Depends(get_db)):
     attendee = crud.check_in_attendee(db, email=request.email, event_id=request.event_id)
     if not attendee:
         raise HTTPException(status_code=404, detail="Attendee not found or invalid email/event combination")
@@ -139,6 +140,59 @@ def check_in_attendee(request: schemas.CheckInRequest, db: Session = Depends(get
     elif attendee.get("error") is not None:
         raise HTTPException(status_code=400, detail=attendee.get("error"))
     return attendee
+
+
+# Upload csv file with columns "event_id", "email"
+@app.post("/checkin/upload-csv/")
+async def upload_checkin_csv(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """
+    Endpoint to upload a CSV file and update attendee check-in statuses.
+    """
+    if file.content_type != "text/csv":
+        raise HTTPException(status_code=400, detail="Invalid file type. Please upload a CSV file.")
+
+    # Read and decode the CSV file
+    contents = await file.read()
+    csv_data = StringIO(contents.decode("utf-8"))
+    csv_reader = csv.DictReader(csv_data)
+
+    # Validate CSV columns
+    required_columns = {"email", "event_id"}
+    if not required_columns.issubset(set(csv_reader.fieldnames or [])):
+        raise HTTPException(
+            status_code=400,
+            detail=f"CSV file must contain the following columns: {', '.join(required_columns)}",
+        )
+
+    updated_records = []
+    for row in csv_reader:
+        email = row.get("email")
+        event_id = row.get("event_id")
+        check_in_status = True
+
+        if not email or not event_id:
+            continue  # Skip rows with missing data
+
+        # Check if attendee exists
+        attendee = (
+            db.query(models.Attendee)
+            .filter(models.Attendee.email == email, models.Attendee.event_id == event_id)
+            .first()
+        )
+
+        if not attendee:
+            continue  # Skip rows with invalid email or event_id
+
+        # Update check-in status
+        attendee.check_in_status = check_in_status
+        updated_records.append(email)
+
+    db.commit()
+
+    return {
+        "message": f"Successfully updated check-in status for {len(updated_records)} attendees.",
+        "updated_records": updated_records,
+    }
 
 
 @app.get("/")

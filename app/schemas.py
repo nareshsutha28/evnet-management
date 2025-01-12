@@ -38,7 +38,7 @@ class EventCreate(BaseModel):
             raise ValueError("Start time should less then end Time.")
         
         # Ensure start_time is in the future
-        if start_time_naive <= datetime.now():
+        if start_time_naive <= datetime.utcnow():
             raise ValueError("Start time must be in the future.")
         return data
 
